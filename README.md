@@ -274,7 +274,7 @@ MySQL (via Docker)
 > Projeto desenvolvido para a disciplina de **Análise e Desenvolvimento de Sistemas**
 > Faculdade de Tecnologia Senac PR — 3º Período — 2025
 >
-> Equipe: *(insira os nomes dos integrantes aqui)*
+> Equipe: Pedro Szpak, Ademir Jnr. e Christian Ferreira
 
 ---
 
