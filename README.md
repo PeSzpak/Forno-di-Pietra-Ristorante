@@ -2,6 +2,8 @@
 
 > Sistema desktop em Java para gerenciamento completo de restaurante italiano — CRUD de pratos e clientes, registro de pedidos com fatura, controle de disponibilidade e o programa de fidelidade **Carta d'Oro** (Bronze · Prata · Ouro).
 
+![Tela inicial do sistema](docs/media/main.webp)
+
 ---
 
 ## 🏛️ Sobre a empresa
@@ -23,8 +25,8 @@
 ### Passo 1 — Clone o repositório
 
 ```bash
-git clone https://github.com/SEU_USUARIO/forno-di-pietra.git
-cd forno-di-pietra
+git clone https://github.com/PeSzpak/Forno-di-Pietra-Ristorante.git
+cd Forno-di-Pietra-Ristorante
 ```
 
 ### Passo 2 — Suba o banco de dados
@@ -44,7 +46,25 @@ docker ps
 **phpMyAdmin** disponível em: [http://localhost:8080](http://localhost:8080)
 - Usuário: `forno` | Senha: `forno123`
 
-### Passo 3 — Compile e execute
+### Passo 3 — Crie o `db.properties`
+
+O arquivo `src/main/resources/db.properties` está no `.gitignore` e não vem no clone. Sem ele, o sistema para com "Arquivo db.properties não encontrado em resources/". Crie-o com as credenciais do `docker-compose.yml`:
+
+```bash
+mkdir -p src/main/resources
+cat > src/main/resources/db.properties <<'PROPS'
+db.url=jdbc:mysql://localhost:3306/fornodipietra?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=America/Sao_Paulo
+db.user=forno
+db.password=forno123
+PROPS
+```
+
+| Chave | Uso |
+|---|---|
+| `db.url` | URL JDBC do MySQL (porta 3306 do container) |
+| `db.user` / `db.password` | Usuário criado pelo `docker-compose.yml` |
+
+### Passo 4 — Compile e execute
 
 ```bash
 mvn clean package -q
@@ -53,7 +73,14 @@ java -jar target/forno-di-pietra.jar
 
 Ou no IntelliJ IDEA: abra o projeto → clique em `Main.java` → **Run**.
 
-### Passo 4 — Encerrar
+Sem Maven, dá para compilar só com o JDK e o driver [mysql-connector-j 8.3.0](https://repo1.maven.org/maven2/com/mysql/mysql-connector-j/8.3.0/mysql-connector-j-8.3.0.jar):
+
+```bash
+javac -encoding UTF-8 -d out $(find src/main/java -name '*.java')
+java -cp "out:src/main/resources:mysql-connector-j-8.3.0.jar" com.fornodipietra.Main
+```
+
+### Passo 5 — Encerrar
 
 ```bash
 docker-compose down          # Para e remove os containers (dados preservados)
@@ -135,13 +162,69 @@ resgate_fidelidade  — histórico de resgates (desconto ou prato grátis)
 
 ### Diagrama de relacionamentos
 
+Gerado a partir de `sql/init.sql`:
+
+```mermaid
+erDiagram
+    cliente ||--o| fidelidade : "possui"
+    cliente ||--o{ pedido : "faz"
+    cliente ||--o{ resgate_fidelidade : "resgata"
+    pedido ||--|{ item_pedido : "contém"
+    prato ||--o{ item_pedido : "aparece em"
+    prato |o--o{ resgate_fidelidade : "prato grátis"
+
+    prato {
+        INT id PK
+        VARCHAR codigo UK
+        VARCHAR nome
+        DECIMAL preco
+        TEXT ingredientes
+        ENUM categoria "ENTRADA, PRATO_PRINCIPAL, SOBREMESA, BEBIDA"
+        BOOLEAN disponivel
+        DATETIME criado_em
+    }
+    cliente {
+        INT id PK
+        VARCHAR nome
+        VARCHAR telefone
+        VARCHAR email UK
+        INT total_pedidos
+        DATETIME criado_em
+    }
+    pedido {
+        INT id PK
+        INT cliente_id FK
+        DATETIME data_hora
+        DECIMAL valor_total
+        ENUM status "ABERTO, FINALIZADO, CANCELADO"
+        VARCHAR observacao
+    }
+    item_pedido {
+        INT id PK
+        INT pedido_id FK
+        INT prato_id FK
+        INT quantidade
+        DECIMAL preco_unitario
+    }
+    fidelidade {
+        INT id PK
+        INT cliente_id FK, UK
+        INT pontos_acumulados
+        ENUM tier "BRONZE, PRATA, OURO"
+        DATETIME atualizado_em
+    }
+    resgate_fidelidade {
+        INT id PK
+        INT cliente_id FK
+        ENUM tipo_resgate "DESCONTO, PRATO_GRATIS"
+        INT prato_id FK
+        DECIMAL desconto_aplicado
+        INT pontos_usados
+        DATETIME data_resgate
+    }
 ```
-cliente ──1──── fidelidade
-   │                │
-   └──1──N── pedido └──1──N── resgate_fidelidade
-                │
-                └──1──N── item_pedido ──N──1── prato
-```
+
+Regras de exclusão: apagar um pedido apaga seus itens (`CASCADE`); apagar um cliente apaga a fidelidade, mas é bloqueado se houver pedidos ou resgates (`RESTRICT`); um prato usado em pedidos não pode ser apagado, e se sair do cardápio o resgate fica com `prato_id = NULL`.
 
 ### Dados de exemplo incluídos
 
@@ -154,6 +237,16 @@ cliente ──1──── fidelidade
 ---
 
 ## 🖥️ Funcionalidades
+
+Capturas do sistema rodando localmente com os dados de exemplo do `init.sql` (todos fictícios).
+
+| Pratos | Clientes |
+|---|---|
+| ![Gestão de pratos](docs/media/pratos.webp) | ![Gestão de clientes com painel Carta d'Oro](docs/media/clientes.webp) |
+| **Novo pedido** | **Disponibilidade** |
+| ![Registro de pedido com carrinho](docs/media/pedido.webp) | ![Controle de disponibilidade](docs/media/disponibilidade.webp) |
+| **Carta d'Oro** | **Relatórios** |
+| ![Consulta de fidelidade](docs/media/fidelidade.webp) | ![Relatório de pratos mais vendidos](docs/media/relatorios.webp) |
 
 ### CRUD
 
@@ -266,6 +359,24 @@ MySQL (via Docker)
 | Tabelas no banco | 6 |
 | Regras de validação | 14 métodos |
 | Commits | 15 |
+
+---
+
+## 🧪 Testes
+
+`src/test/java/com/fornodipietra/DatabaseConnectionTest.java` tem dois testes (Singleton e obtenção de conexão). Rode com `mvn test`, com o banco no ar e o `db.properties` criado: sem o arquivo, `getInstance()` lança exceção e o primeiro teste falha.
+
+---
+
+## ⚠️ Limitações conhecidas
+
+- **Acentos corrompidos no banco criado pelo Docker.** O `init.sql` não define `SET NAMES utf8mb4`, e o cliente `mysql` que o container usa para rodar o script assume `latin1`. Resultado: "Tiramisù" vira "TiramisÃ¹", "ragù" vira "ragÃ¹" etc. Para corrigir um banco já criado, recarregue o script forçando UTF-8:
+  ```bash
+  docker exec -i fornodipietra-db sh -c "mysql -uroot -proot -e 'DROP DATABASE fornodipietra' && mysql -uroot -proot --default-character-set=utf8mb4" < sql/init.sql
+  ```
+  A correção definitiva é adicionar `SET NAMES utf8mb4;` no topo do `init.sql` e recriar o volume (`docker-compose down -v`).
+- `cliente.total_pedidos` é semeado com `0` para todos, mesmo para quem já tem pedidos no `init.sql`; a coluna "Pedidos" da tela de clientes começa inconsistente.
+- O `db.properties` não tem arquivo de exemplo versionado (ver Passo 3).
 
 ---
 
